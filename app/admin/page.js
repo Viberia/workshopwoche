@@ -87,6 +87,11 @@ function toInt(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function extractGrade(cls) {
+  const match = String(cls).match(/\d+/)
+  return match ? Number(match[0]) : null
+}
+
 function formatGradeRange(from, to) {
   const f = toInt(from);
   const t = toInt(to);
@@ -1928,18 +1933,66 @@ async function handleAssign(student, slot) {
 
   setAssignTarget({ student, slot })
 
-  const { data, error } = await supabase.rpc(
-    "get_workshops_for_slot",
-    { _slot: slot }
-  )
+  const grade = extractGrade(student.class)
 
-  if(error){
-    console.error(error)
+  if (grade === null) {
+    alert("Klassenstufe konnte nicht erkannt werden")
     return
   }
 
-  setAssignWorkshops(data || [])
+  // 🔥 1. Workshops laden
+  const { data, error } = await supabase.rpc(
+    "get_workshops_for_slot",
+    { 
+      _slot: slot,
+      _grade: grade
+    }
+  )
 
+  if (error) {
+    console.error("RPC ERROR:", error)
+    alert(error.message)
+    return
+  }
+
+  // 🔥 2. Helper: Slots extrahieren
+  function extractSlots(str) {
+    return (String(str ?? "").match(/\d+/g) || []).map(Number)
+  }
+
+  // 🔥 3. Bereits belegte Slots des Schülers
+  const userSlots = (student.workshops || []).flatMap(sw =>
+    extractSlots(sw.time_slot)
+  )
+
+  console.log("USER SLOTS:", userSlots)
+
+  // 🔥 4. FINAL FILTER
+  const filtered = (data || []).filter(w => {
+
+    // ✅ Klassenfilter (Sicherheit, auch wenn RPC es schon macht)
+    const from = Number(w.grade_from)
+    const to   = Number(w.grade_to)
+
+    if (from && grade < from) return false
+    if (to && grade > to) return false
+
+    // ✅ Multi-Booking erlaubt → IMMER anzeigen
+    if (w.allow_multi_booking) return true
+
+    // ❌ Slot-Konflikt prüfen
+    const workshopSlots = extractSlots(w.time_slot)
+
+    const hasConflict = workshopSlots.some(s =>
+      userSlots.includes(s)
+    )
+
+    return !hasConflict
+  })
+
+  console.log("FILTERED WORKSHOPS:", filtered)
+
+  setAssignWorkshops(filtered)
 }
 
   async function adminToggleStatus(id) {

@@ -667,7 +667,11 @@ const loadWorkshops = React.useCallback(async () => {
   let data, error;
 
   if (profile.role === "teacher") {
-    ({ data, error } = await supabase.rpc("list_my_workshops_with_registered"));
+    ({ data, error } = await supabase
+  .from("workshops_with_counts")
+  .select("*")
+  .eq("owner_id", profile.id)
+  .order("created_at", { ascending: false }));
   } else {
     // Fallback (z.B. admin) – ohne registered (optional später erweitern)
     ({ data, error } = await supabase
@@ -739,24 +743,7 @@ useEffect(() => {
 }, [supabase, profile]);
 
 
-useEffect(() => {
-  if (!profile) return;
 
-  const ch = supabase
-    .channel("teacher-registrations-refresh")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "registrations" },
-      () => {
-        loadWorkshops();
-      }
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(ch);
-  };
-}, [supabase, profile, loadWorkshops]);
 
 
 //alle freigegebenen Workshops laden (für Raum-Sperre)
@@ -770,7 +757,7 @@ useEffect(() => {
       .eq("status", "confirmed");
 
     if (error) {
-      console.error("Fehler beim Laden der blockierenden Workshops:", error);
+      console.error("Fehler beim Laden:", JSON.stringify(error, null, 2));
       return;
     }
 
@@ -778,7 +765,7 @@ useEffect(() => {
   }
 
   loadConfirmed();
-}, [supabase, profile, workshops]);
+}, [supabase, profile]);
 
 async function adminUnlock(id) {
   const { error } = await supabase.rpc("admin_unlock_workshop", { _workshop_id: id });

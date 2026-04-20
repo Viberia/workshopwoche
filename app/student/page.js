@@ -718,7 +718,7 @@ function Row({ label, value }) {
 
 
 /* ==============================  MY CHOICES UI  =============================== */
-function MyChoicesUI({ workshops, myChoices, onOpen, onCancel, cancellingId }) {
+function MyChoicesUI({ workshops, myChoices, onOpen, onCancel, cancellingId, studentWindowOpen }) {
   const byId = useMemo(() => Object.fromEntries(workshops.map(w => [w.id, w])), [workshops]);
 
   const coveredSlots = useMemo(() => {
@@ -788,10 +788,10 @@ function MyChoicesUI({ workshops, myChoices, onOpen, onCancel, cancellingId }) {
     </button>
 
     <button
-      className="btn focus-aurora"
-      onClick={() => onCancel?.(c.workshopId)}
-      disabled={cancellingId === c.workshopId}
-      title="Workshop abwählen"
+  className="btn focus-aurora"
+  onClick={() => onCancel?.(c.workshopId)}
+  disabled={!studentWindowOpen || cancellingId === c.workshopId}
+  title={!studentWindowOpen ? "Wahlzeitraum abgelaufen" : "Workshop abwählen"}
       style={{
         height: 34,
         padding: "0 10px",
@@ -1371,6 +1371,11 @@ async function chooseWorkshop(w) {
 const [cancelingId, setCancelingId] = useState(null);
 
 async function cancelWorkshopChoice(workshopId) {
+  if (!studentWindowOpen) {
+    alert("Der Wahlzeitraum ist abgelaufen.");
+    return;
+  }
+
   setConfirmCancel(workshopId);
 }
 
@@ -1775,12 +1780,13 @@ select:disabled {
 {view === 'my' && (
   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .18 }}>
     <MyChoicesUI
-      workshops={workshops}
-      myChoices={myChoices}
-      onOpen={openDetail}
-      onCancel={cancelWorkshopChoice}
-      cancellingId={cancelingId}
-    />
+  workshops={workshops}
+  myChoices={myChoices}
+  onOpen={openDetail}
+  onCancel={cancelWorkshopChoice}
+  cancellingId={cancelingId}
+  studentWindowOpen={studentWindowOpen}
+/>
   </motion.div>
 )}
 
@@ -1867,7 +1873,12 @@ select:disabled {
                   border: `1px solid ${TOK.errBorder}`,
                 }}
                 onClick={async () => {
-                  const workshopId = confirmCancel;
+  if (!studentWindowOpen) {
+    alert("Der Wahlzeitraum ist abgelaufen. Änderungen sind nicht mehr möglich.");
+    return;
+  }
+
+  const workshopId = confirmCancel;
                   setConfirmCancel(null);
                   setCancelingId(workshopId);
 
